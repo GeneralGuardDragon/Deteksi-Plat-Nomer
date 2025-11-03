@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Deteksi Plat Nomor — Modern UI</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="container">
+      <h1>Deteksi Plat Nomor</h1>
+      <p class="subtitle">Flask • PCD (Pra-prosesing + Transformasi Warna) • EasyOCR + Roboflow</p>
+    </div>
+  </header>
+
+  <main class="container grid">
+    <section class="card upload-card">
+      <h2>Unggah Gambar</h2>
+      <form id="uploadForm">
+        <label class="file-input">
+          <input type="file" id="file" name="file" accept="image/*" required />
+          <span>Pilih Gambar</span>
+        </label>
+
+        <div class="controls">
+          <button type="submit" class="btn primary">Deteksi</button>
+          <button type="button" id="clearBtn" class="btn">Bersihkan</button>
+        </div>
+      </form>
+
+      <div id="loading" class="loading" hidden>Sedang memproses...</div>
+
+      <div id="preview" class="preview" hidden>
+        <h3>Hasil Deteksi</h3>
+        <img id="resultImage" alt="Hasil Deteksi" />
+        <p id="detectedText" class="detected-text"></p>
+        <div class="result-actions">
+          <button id="downloadTxt" class="btn">Download TXT</button>
+        </div>
+      </div>
+
+      <div id="preprocess" class="preview" hidden>
+        <h3>Pra-Prosesing</h3>
+        <p>Konversi RGB → BGR</p>
+        <img id="bgrImage" alt="RGB to BGR" />
+        <p>Segmentasi (Thresholding)</p>
+        <img id="segImage" alt="Segmentasi" />
+        <div id="cropContainer"></div>
+      </div>
+    </section>
+
+    <aside class="card history-card">
+      <h2>Riwayat Deteksi</h2>
+      <div id="historyList" class="history-list">
+        <p class="muted">Belum ada riwayat.</p>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <small>© Muhammad Farhan 23.0504.0064 — Demo PCD Pra-prosesing & Warna</small>
+    </div>
+  </footer>
+
+  <script>
+    const form = document.getElementById('uploadForm');
+    const loading = document.getElementById('loading');
+    const preview = document.getElementById('preview');
+    const preprocess = document.getElementById('preprocess');
+    const resultImage = document.getElementById('resultImage');
+    const detectedText = document.getElementById('detectedText');
+    const bgrImage = document.getElementById('bgrImage');
+    const segImage = document.getElementById('segImage');
+    const cropContainer = document.getElementById('cropContainer');
+    const historyList = document.getElementById('historyList');
+    const downloadTxt = document.getElementById('downloadTxt');
+    const clearBtn = document.getElementById('clearBtn');
+
+    async function loadHistory() {
+      const res = await fetch('/history');
+      const data = await res.json();
+      if (!data || data.length === 0) {
+        historyList.innerHTML = '<p class="muted">Belum ada riwayat.</p>';
+        return;
+      }
+      historyList.innerHTML = data.map(item => `
+        <div class="history-item">
+          <div>
+            <div class="filename">${item.filename}</div>
+            <div class="time">${item.timestamp}</div>
+            <div class="texts">Hasil: ${item.texts.length ? item.texts.join(', ') : 'TIDAK TERBACA'}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const f = document.getElementById('file').files[0];
+      if (!f) return alert('Pilih file gambar terlebih dahulu.');
+
+      loading.hidden = false;
+      preview.hidden = true;
+      preprocess.hidden = true;
+
+      const formData = new FormData();
+      formData.append('file', f);
+
+      try {
+        const res = await fetch('/upload', { method: 'POST', body: formData });
+        const data = await res.json();
+        loading.hidden = true;
+        if (data.error) {
+          alert(data.error);
+          return;
+        }
+
+        resultImage.src = 'data:image/jpeg;base64,' + data.image;
+        detectedText.textContent = data.texts.length ? 'Plat: ' + data.texts.join(', ') : 'Plat: TIDAK TERBACA';
+        preview.hidden = false;
+
+        bgrImage.src = 'data:image/jpeg;base64,' + data.bgr_image;
+        segImage.src = 'data:image/jpeg;base64,' + data.segmentasi;
+        cropContainer.innerHTML = '';
+        if (data.crop_list && data.crop_list.length > 0) {
+          cropContainer.innerHTML = '<h4>Hasil Cropping:</h4>' +
+            data.crop_list.map(c => `<img src="data:image/jpeg;base64,${c}" style="max-width:100%;margin-top:8px;border-radius:8px;">`).join('');
+        }
+        preprocess.hidden = false;
+
+        downloadTxt.onclick = () => {
+          const txt = `Filename: ${data.filename}\nTime: ${data.timestamp}\nPlate: ${data.texts.join(', ')}\n`;
+          const blob = new Blob([txt], { type: 'text/plain' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `result_${Date.now()}.txt`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+        };
+
+        await loadHistory();
+      } catch (err) {
+        loading.hidden = true;
+        alert('Terjadi kesalahan saat mengirim file.');
+        console.error(err);
+      }
+    });
+
+    clearBtn.addEventListener('click', () => {
+      document.getElementById('file').value = '';
+      preview.hidden = true;
+      preprocess.hidden = true;
+    });
+
+    loadHistory();
+  </script>
+</body>
+</html>
