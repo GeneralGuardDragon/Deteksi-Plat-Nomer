@@ -10,8 +10,8 @@ import base64
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 
-API_KEY = ""
-MODEL_URL = ""
+API_KEY = "BHLEULPbKXTPPleqI4LR"
+MODEL_URL = "https://detect.roboflow.com/plat-nomor-kendaraan-indonesia-gqzhg-y4x8x/3"
 
 reader = easyocr.Reader(['en'])
 history = []
